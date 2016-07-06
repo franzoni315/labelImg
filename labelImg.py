@@ -126,6 +126,11 @@ class MainWindow(QMainWindow, WindowMixin):
         self.dockFeatures = QDockWidget.DockWidgetClosable\
                           | QDockWidget.DockWidgetFloatable
         self.dock.setFeatures(self.dock.features() ^ self.dockFeatures)
+        self.fastAnnotationMode = False
+
+        with __builtins__.open('data/default_class.txt', 'r') as f:
+            self.default_class = f.readline().rstrip('\n')
+            print self.default_class
 
         # Actions
         action = partial(newAction, self)
@@ -150,7 +155,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 'p', 'prev', u'Open Prev')
 
         save = action('&Save', self.saveFile,
-                'Ctrl+S', 'save', u'Save labels to file', enabled=False)
+                ['Ctrl+S','s'], 'save', u'Save labels to file', enabled=False)
         saveAs = action('&Save As', self.saveFileAs,
                 'Ctrl+Shift+S', 'save-as', u'Save labels to a different file',
                 enabled=False)
@@ -230,6 +235,10 @@ class MainWindow(QMainWindow, WindowMixin):
                 icon='color', tip=u'Change the fill color for this specific shape',
                 enabled=False)
 
+        fastAnnotation = action('&Fast Annotation', self.fastAnnotation,
+                tip=u'Fast annotation mode for 1 class',
+                checkable=True, enabled=True)
+
         labels = self.dock.toggleViewAction()
         labels.setText('Show/Hide Label Panel')
         labels.setShortcut('Ctrl+Shift+L')
@@ -251,7 +260,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 zoomActions=zoomActions,
                 fileMenuActions=(open,opendir,save,saveAs,close,quit),
                 beginner=(), advanced=(),
-                editMenu=(edit, copy, delete, None, color1, color2),
+                editMenu=(edit, copy, delete, None, color1, color2, fastAnnotation),
                 beginnerContext=(create, edit, copy, delete),
                 advancedContext=(createMode, editMode, edit, copy,
                     delete, shapeLineColor, shapeFillColor),
@@ -605,8 +614,10 @@ class MainWindow(QMainWindow, WindowMixin):
         """
         if len(self.labelHist) > 0:
             self.labelDialog = LabelDialog(parent=self, listItem=self.labelHist)
-
-        text = self.labelDialog.popUp()
+        if self.fastAnnotationMode:
+            text = self.default_class
+        else:
+            text = self.labelDialog.popUp()
         if text is not None:
             self.addLabel(self.canvas.setLastLabel(text))
             if self.beginner(): # Switch to edit mode.
@@ -710,6 +721,8 @@ class MainWindow(QMainWindow, WindowMixin):
                     xmlPath = os.path.join(self.defaultSaveDir, basename + '.xml')
                     self.loadPascalXMLByFilename(xmlPath)
 
+            if self.fastAnnotationMode:
+                self.createShape()
             return True
         return False
 
@@ -910,6 +923,8 @@ class MainWindow(QMainWindow, WindowMixin):
             else:
                 self._saveFile(self.filename if self.labelFile\
                                          else self.saveFileDialog())
+            if self.fastAnnotationMode:
+                self.openNextImg()
 
     def saveFileAs(self, _value=False):
         assert not self.image.isNull(), "cannot save empty image"
@@ -1014,6 +1029,9 @@ class MainWindow(QMainWindow, WindowMixin):
             self.canvas.selectedShape.fill_color = color
             self.canvas.update()
             self.setDirty()
+
+    def fastAnnotation(self):
+        self.fastAnnotationMode = not self.fastAnnotationMode
 
     def copyShape(self):
         self.canvas.endMove(copy=True)
